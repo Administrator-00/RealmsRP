@@ -310,4 +310,130 @@ mod tests {
             .unwrap();
         assert_eq!(count, 0, "事务应回滚, 无脏数据");
     }
+
+    #[test]
+    fn demo_memory_inspection() {
+        let pool = setup_pool();
+
+        // 模拟一连串事件: 客栈老板招呼 → 林月如受伤 → 好感变化
+        let events: Vec<DomainEvent> = vec![
+            DomainEvent::Dialogue {
+                cycle_id: "c1".into(),
+                actor_id: "npc_innkeeper".into(),
+                actor_type: ActorType::Npc,
+                target_id: Some("user".into()),
+                target_type: TargetType::User,
+                location_id: Some("yuhang_town".into()),
+                line: "客官里面请！".into(),
+                world_time: Some("午时".into()),
+                importance: 0.3,
+                summary: "客栈老板招呼客人".into(),
+            },
+            DomainEvent::StateChange {
+                cycle_id: "c1".into(),
+                actor_id: "lin_yueru".into(),
+                actor_type: ActorType::Npc,
+                target_id: Some("lin_yueru".into()),
+                target_type: TargetType::Npc,
+                field: "hp".into(),
+                old_value: None,
+                new_value: "60".into(),
+                world_time: Some("未时".into()),
+                importance: 0.7,
+                summary: "林月如战斗中受伤 HP→60".into(),
+            },
+            DomainEvent::RelationshipChange {
+                cycle_id: "c1".into(),
+                npc_id: "lin_yueru".into(),
+                field: "affinity".into(),
+                old_value: None,
+                new_value: "55".into(),
+                delta: Some(55.0),
+                world_time: Some("未时".into()),
+                importance: 0.6,
+                summary: "林月如好感 +55".into(),
+            },
+        ];
+
+        for ev in &events {
+            process_event(&pool, ev).expect("process");
+        }
+
+        let conn = pool.get().unwrap();
+
+        println!("\n========== 三层记忆内容 ==========\n");
+
+        // L1: episodic_memories
+        println!("【L1 情景记忆 episodic_memories】");
+        let mut stmt = conn
+            .prepare("SELECT id, character_id, content, created_at FROM episodic_memories WHERE cycle_id='c1' ORDER BY id")
+            .unwrap();
+        let rows = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                ))
+            })
+            .unwrap();
+        for row in rows {
+            let (id, cid, content, ts) = row.unwrap();
+            println!("  [{id}] {cid:>16} | {content} | {ts}");
+        }
+
+        // L2: semantic_memories
+        println!("\n【L2 语义记忆 semantic_memories】");
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM semantic_memories WHERE cycle_id='c1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        println!("  (stub: 共 {count} 条, 语义层写入待 M10 扩展)");
+
+        // L3: emotional_memories
+        println!("\n【L3 情感记忆 emotional_memories】");
+        let mut stmt = conn
+            .prepare("SELECT id, character_id, target_id, emotion_type, intensity, context FROM emotional_memories WHERE cycle_id='c1' ORDER BY id")
+            .unwrap();
+        let rows = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, f64>(4)?,
+                    r.get::<_, String>(5)?,
+                ))
+            })
+            .unwrap();
+        for row in rows {
+            let (id, cid, tid, etype, inten, ctx) = row.unwrap();
+            println!("  [{id}] {cid:>16} → {tid:>8} | {etype:>8} (intensity={inten}) | {ctx}");
+        }
+
+        // 总计
+        let epi: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM episodic_memories WHERE cycle_id='c1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let emo: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM emotional_memories WHERE cycle_id='c1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        println!("\n  合计: episodic={epi}, emotional={emo}\n");
+
+        assert!(epi >= 2, "应有至少 2 条 episodic (actor+target)");
+        assert!(emo >= 1, "Dialogue 应有 emotional");
+    }
 }
