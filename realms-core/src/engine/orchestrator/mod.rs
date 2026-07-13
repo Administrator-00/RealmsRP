@@ -4,3 +4,7 @@
 //! - `dm_router`: 角色调度 + 三重防护 (M2.4-M2.6)
 
 pub mod prompt_assembler;
+
+// 重新导出 prompt_assembler 的核心 API, 供上层直接用
+// `realms_core::engine::orchestrator::build_system_prompt`.
+pub use prompt_assembler::{build_system_prompt, PromptContext};
