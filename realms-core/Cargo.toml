@@ -41,8 +41,20 @@ async-trait = "0.1"
 # HTTP client (for HttpLlmProvider)
 reqwest = { version = "0.12", features = ["json"] }
 
+# HTTP server (G2)
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
+tower = { version = "0.4", features = ["util"] }
+tokio-stream = "0.1"
+futures = "0.3"
+
 [dev-dependencies]
 tempfile = "3"
+tower = { version = "0.4", features = ["util"] }
+
+[[bin]]
+name = "realms-server"
+path = "src/bin/server.rs"
 
 [profile.dev]
 opt-level = 0

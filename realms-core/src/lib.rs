@@ -31,6 +31,7 @@ pub mod db;
 pub mod engine;
 pub mod error;
 pub mod events;
+pub mod server;
 
 pub use error::RealmsError;
 pub use events::DomainEvent;

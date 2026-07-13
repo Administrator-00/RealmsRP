@@ -77,7 +77,7 @@ worlds/
 
 ### 4. 💕 OC 关系模板 (快速开局)
 
-创建自定义角色 (OC) 时,为每个内置 NPC 选一个**关系模板**——**不再靠 LLM 在第一回合自创关系**。
+创建自定义角色 (OC) 时,为每个内置 NPC 选一个**关系模板**——你也可以选择自定义。
 
 | 模板 | 初始好感 | 信任 | 亲密 | initial_type |
 |---|---:|---:|---:|---|
@@ -130,8 +130,8 @@ L3 长期: SQLite + FTS5  (episodic / semantic / emotional)
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  ① 前端层 (双形态 GUI)                                            │
-│  webui (浏览器原生,PC+手机 PWA) + ui (Tauri+Vue 桌面)             │
+│  ① 前端层                                                        │
+│  webui                                                           │
 │  widgets: WorldSelector / CycleList / OcCreator /                │
 │           NpcSelector / GmSwitcher / PerspectiveSwitcher /        │
 │           RelationshipMatrix / ArcTimeline / EmotionalMap / ...   │
@@ -179,7 +179,7 @@ L3 长期: SQLite + FTS5  (episodic / semantic / emotional)
 
 | 组件 | 来源 | 角色 | 复用度 |
 |---|---|---|:---:|
-| **AIRP monorepo** | [GhostXia/AIRP](https://github.com/GhostXia/AIRP) | engine + webui + ui + protocol | 0 修改 |
+| **AIRP monorepo** | [GhostXia/AIRP](https://github.com/GhostXia/AIRP) | engine + webui  + protocol | 0 修改 |
 | **AIRP-MCP-Server** | [GhostXia/AIRP-MCP-Server](https://github.com/GhostXia/AIRP-MCP-Server) | RP 数据后端 (38 工具) | 0 修改 |
 | **AIRP-State-Protocol** | [GhostXia/AIRP-State-Protocol](https://github.com/GhostXia/AIRP-State-Protocol) | Widget 协议 (Blueprint + RFC6902 patch) | 0 修改 |
 | **tavern2agent** | [Xerxes-2/tavern2agent](https://github.com/Xerxes-2/tavern2agent) | 多 subagent 架构模板 | 0 修改 |
