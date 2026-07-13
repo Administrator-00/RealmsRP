@@ -34,10 +34,9 @@ realms-core/.pi/tavern2agent-output/
 realms-core/data/
 realms-core/target/
 
-# Source reference docs (1.md/2.md) — kept for history but not required
-# (3.md is the authoritative design)
-1.md
-2.md
+# Markdown docs (except README)
+*.md
+!README.md
 
 
 # AI assistant artifacts
