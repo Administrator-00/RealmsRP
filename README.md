@@ -101,7 +101,7 @@ worlds/
 SillyTavern 群聊官方明文警告 "characters being confused about themselves, having merged personalities"。Realms 解决:
 
 1. **独立 context** — 每个角色 subagent 全新 system prompt (戒律#6 测试守护)
-2. **hiddenPublicPolicy** — DM 派发前过滤"角色不该看的信息"
+2. **hiddenPublicPolicy** — GM 派发前过滤"角色不该看的信息"
 3. **工具白名单** — 角色 subagent 只能 lookup + suggest_event,不能 update_state
 4. **domain event 归口** — 所有状态变更走 reducer
 5. **auditor subagent** — 异步检查"是否知道太多/秘密是否串层"
@@ -159,7 +159,7 @@ L3 长期: SQLite + FTS5  (episodic / semantic / emotional)
 ┌──────────────────────────────▼───────────────────────────────────┐
 │  ④ 核心引擎层 = 胶水层 (自实现, ~6000 行)                          │
 │  ┌────────────────────────────────────────────────────────────┐  │
-│  │ DM 编排器: prompt_assembler + dm_router + 5 重防护         │  │
+│  │ GM 编排器: prompt_assembler + gm_router + 5 重防护         │  │
 │  │ Reducer 流水线: arc / relationship / memory / state / event │  │
 │  │ Cycle 管理: 创建/加载/切换/复制/对比                         │  │
 │  │ 角色 subagent: tavern2agent 模板 + AIRP 戒律#6              │  │
@@ -182,7 +182,7 @@ L3 长期: SQLite + FTS5  (episodic / semantic / emotional)
 | **AIRP-State-Protocol** | [GhostXia/AIRP-State-Protocol](https://github.com/GhostXia/AIRP-State-Protocol) | Widget 协议 (Blueprint + RFC6902 patch) | 0 修改 |
 | **tavern2agent** | [Xerxes-2/tavern2agent](https://github.com/Xerxes-2/tavern2agent) | 多 subagent 架构模板 | 0 修改 |
 | **SQLite (via rusqlite)** | embedded | 长期事实库 (ACID + FTS5 + JSON1) | 0 集成 |
-| **(自实现) DM 编排器** | this repo | 胶水层 (~6000 行) | — |
+| **(自实现) GM 编排器** | this repo | 胶水层 (~6000 行) | — |
 
 **为什么这套组合**:
 - AIRP engine — 唯一已落地的 Rust HTTP agent loop (M_AGENT-1, **299 passing tests**),戒律#6 是测试守护的代码级不变式
@@ -292,12 +292,12 @@ curl -X POST http://localhost:8000/v1/settings \
 |---|---|---|:---:|
 | M0 基础验证 | 0.5 天 | engine + webui + MCP-Server 跑通 | 🔜 |
 | M1 角色卡编译 | 0.5 天 | tavern2agent 编译仙剑角色卡 | 🔜 |
-| M2 DM 编排器 | 2-3 天 | dm_router + reducers + prompt_assembler | 🔜 |
+| M2 GM 编排器 | 2-3 天 | gm_router + reducers + prompt_assembler | 🔜 |
 | M3 基础 widget | 2-3 天 | Chat / State / Affinity / Inventory / ArcTimeline | 🔜 |
 | M4 World/Cycle 数据模型 | 1 天 | SQLite schema + 文件系统布局 | 🔜 |
 | M5 NPC/OC/GM 数据层 | 1.5 天 | perspective + npc_base + gm_prompts 管理 | 🔜 |
 | M6 OC 关系模板 | 1 天 | 模板 + 初始化流程 | 🔜 |
-| M7 DM_Router 完整 | 2-3 天 | 角色 subagent + 5 重防护 + reducer 完整 | 🔜 |
+| M7 GM Router 完整 | 2-3 天 | 角色 subagent + 5 重防护 + reducer 完整 | 🔜 |
 | M8 跨周目对比 | 1 天 | SQL + widget | 🔜 |
 | M9 WebUI 完整 | 3-4 天 | 7 个新增 widget + 响应式 + PWA | 🔜 |
 | M10 质量保证 | 2-3 天 | 串台/弧光跳变检测 + 审计 | 🔜 |
@@ -373,7 +373,7 @@ realms/
 │   ├── engine/
 │   │   ├── orchestrator/
 │   │   │   ├── prompt_assembler.rs    # GM 拼接核心
-│   │   │   ├── dm_router.rs           # 角色调度
+│   │   │   ├── gm_router.rs           # 角色调度
 │   │   │   └── cycle_manager.rs       # 周目管理
 │   │   ├── reducers/
 │   │   │   ├── arc_reducer.rs         # 弧光

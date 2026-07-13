@@ -42,7 +42,7 @@ Realms:       N world × N cycle × N perspective(内置+OC) × N NPC × 隔离 
 | **AIRP-State-Protocol** | github.com/GhostXia/AIRP-State-Protocol (本地 ../AIRP-State-Protocol/) | Widget 协议 |
 | **tavern2agent** | github.com/Xerxes-2/tavern2agent (本地 ../tavern2agent/) | 多 subagent 架构模板 |
 | **SQLite (rusqlite)** | embedded | 长期事实库 |
-| **自实现胶水层** | `realms-core/` (本仓) | DM 编排器 (~6000 行) |
+| **自实现胶水层** | `realms-core/` (本仓) | GM 编排器 (~6000 行) |
 
 **绝对不修改**:`../AIRP/`, `../AIRP-MCP-Server/`, `../AIRP-State-Protocol/`, `../tavern2agent/`
 
@@ -255,7 +255,7 @@ M0 - 基础环境验证
 
 ## 待开始
 - M1 角色卡编译
-- M2 DM 编排器
+- M2 GM 编排器
 - ...
 
 ## 决策记录
@@ -476,10 +476,10 @@ mkdir -p realms-core/gms
 
 ---
 
-### M2: DM 编排器(3 天)
+### M2: GM 编排器(3 天)
 
 #### 目标
-实现核心编排器: prompt_assembler + dm_router + 4 reducer + event_reducer 串起来
+实现核心编排器: prompt_assembler + gm_router + 4 reducer + event_reducer 串起来
 
 #### 子任务(11 个,严格按顺序)
 
@@ -628,7 +628,7 @@ pub fn build_system_prompt(ctx: &PromptContext) -> String { /* 7 段拼接 */ }
 
 **这是核心,先做!**
 
-##### M2.4-M2.6 dm_router.rs 三重防护
+##### M2.4-M2.6 gm_router.rs 三重防护
 
 **M2.4 独立 context**:
 
@@ -676,7 +676,7 @@ pub fn filter_events_for_role(events: &[DomainEvent], policy: &PublicPolicy) -> 
 
 **DoD**:
 - [ ] 默认 policy 三 false
-- [ ] 3+ 测试(秘密/内心独白/DM 内部都被过滤)
+- [ ] 3+ 测试(秘密/内心独白/GM 内部都被过滤)
 
 **M2.6 tools 白名单**:
 
@@ -761,7 +761,7 @@ pub async fn process_event(pool: &DbPool, event: DomainEvent) -> Result<Vec<Patc
 - [ ] cargo test 全通过
 - [ ] cargo clippy 无 warning
 - [ ] cargo fmt
-- [ ] commit: "feat(orchestrator): M2 - DM 编排器 + 4 reducer + 三重防护"
+- [ ] commit: "feat(orchestrator): M2 - GM 编排器 + 4 reducer + 三重防护"
 - [ ] STATUS.md 标记 M2 完成
 
 ---
@@ -981,14 +981,14 @@ pub async fn initialize_cycle_with_templates(
 
 ---
 
-### M7: DM_Router 完整(2-3 天)
+### M7: GM Router 完整(2-3 天)
 
 #### 子任务
 
 ```
 M7.1 完整 dispatch(M2.4-2.6 集成)
 M7.2 visibleResponse + privateIntent 协议
-M7.3 suggestedEvents 收集 + DM 决策
+M7.3 suggestedEvents 收集 + GM 决策
 M7.4 auditor subagent
 M7.5 集成测试: 完整单轮流程
 ```
@@ -1239,7 +1239,7 @@ UPDATE meta SET value = '3' WHERE key = 'schema_version';
 |---|---|
 | reducer | 100% |
 | prompt_assembler | 90% |
-| dm_router | 80% |
+| gm_router | 80% |
 | cycle_manager | 80% |
 | oc_initializer | 90% |
 | widget | 60% |
@@ -1359,7 +1359,7 @@ M[X].Y (子任务名) - 状态
 - [x] M2.3 (2026-07-14) - prompt_assembler
 
 ## 进行中
-- [ ] M2.4 (90%) - dm_router 独立 context
+- [ ] M2.4 (90%) - gm_router 独立 context
 
 ## 待开始
 - M2.5 - hiddenPublicPolicy
@@ -1374,7 +1374,7 @@ M[X].Y (子任务名) - 状态
 - #1 ...
 
 ## 下次 session 起点
-M2.5 dm_router hiddenPublicPolicy, 从这里继续
+M2.5 gm_router hiddenPublicPolicy, 从这里继续
 ```
 
 ### 9.2 ADR 模板
