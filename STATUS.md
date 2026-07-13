@@ -1,44 +1,56 @@
 # Realms 项目状态
 
-> 最后更新: 2026-07-13, Session #3 (M2 进度 7/11)
+> 最后更新: 2026-07-13, Session #3 (**M2 完成！11/11**)
 
 ## 当前阶段
 
-**M2.7 完成** ✅ state_reducer 就绪, 准备 M2.8 relationship_reducer
+**M2 ✅ 完成** — GM 编排器全部就绪, 准备 M3 基础 widget 或 M4 数据模型
 
 ## 已完成
 
-- [x] M2.1-M2.6: Cargo 骨架 + DomainEvent + pool + prompt_assembler + gm_router 三重防护
-- [x] **M2.7** state_reducer — 处理 StateChange, 写 character_states
-  - 6 字段: hp/mp (i64) / location_id / arc_phase / mood / status_flag (JSON merge)
-  - UPSERT 模式: INSERT OR IGNORE 默认值 → UPDATE 指定字段
-  - 产出 PatchOp (RFC6902 replace, JSON Pointer 路径)
-  - 10 单元测试 (CRUD + 错误) + 4 merge_json_flags 纯函数测试
-- [x] PatchOp 共享类型 (reducers/mod.rs), CHARACTER_STATES_DDL 测试用 schema
+| M# | 模块 | 测试 |
+|---|---|---|
+| M2.1 | Cargo 骨架 + RealmsError | 5 |
+| M2.2 | DomainEvent 9 variant | 9 |
+| M2.3 | prompt_assembler (7 段 GM 拼接) | 12 |
+| M2.4 | gm_router 独立 context | 15 |
+| M2.5 | PublicPolicy 叠加过滤 | 10 |
+| M2.6 | RoleCapability 工具白名单 | 4 |
+| M2.7 | state_reducer | 14 |
+| M2.8 | relationship_reducer | 8 |
+| M2.9 | arc_reducer | 11 |
+| M2.10 | memory_reducer | 5 |
+| M2.11 | event_reducer 主入口 | 5 |
+| M4.2 | SQLite pool | 3 |
+| — | 术语同步 + 修复 | — |
 
-## 待开始
+| **合计** | **12 个模块** | **101 unit + 1 doc** |
 
-- **M2.8** relationship_reducer — RelationshipChange → npc_user_relationships + history
-- **M2.9** arc_reducer — ArcIncrement + 判定 arc_phase
-- **M2.10** memory_reducer — 3 层记忆写入
-- **M2.11** event_reducer — 主入口串接 9 variant + 单事务
-- M3-M11 ...
+## 架构摘要
 
-## 累计测试
-
-| 模块 | 测试数 |
-|---|---|
-| error / domain_event / pool / lib | 19 |
-| prompt_assembler.rs | 12 |
-| gm_router.rs | 27 + 2 doctest |
-| state_reducer.rs | 14 |
-| **合计** | **73 unit + 2 doctest** |
+```
+event_reducer::process_event(pool, event)
+  │
+  ├→ 写 domain_events 行
+  ├→ 分发子 reducer (match event_type):
+  │   ├ StateChange      → state_reducer     → character_states
+  │   ├ RelationshipChange → relationship_reducer → npc_user_relationships + history
+  │   └ ArcIncrement     → arc_reducer       → arcs JSON + arc_phase
+  ├→ auto_record memories (episodic + emotional)
+  └→ 单事务提交, 返回 Vec<PatchOp>
+```
 
 ## 决策记录
 
 见 `docs/adr/` — ADR-0001..0006
 
+## 待开始
+
+- M3: 基础 widget (6 个 .vue)
+- M4: World/Cycle 数据模型 (SQLite schema + CRUD)
+- M5-M11 ...
+
 ## 下次 session 起点
 
-**M2.8 relationship_reducer**: 处理 RelationshipChange, 写 npc_user_relationships +
-relationship_history. 3+ 单测 (单事务 / 产出 patch / history 追加).
+**M3.1 StateWidget** 或 **M4.1 SQL schema** — 视优先级而定.
+建议 M4 先补齐完整 schema (M2 的 DDL 都是测试用最小版), 再上 M3 widget.

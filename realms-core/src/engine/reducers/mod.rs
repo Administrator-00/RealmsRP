@@ -11,11 +11,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 pub mod arc_reducer;
+pub mod event_reducer;
 pub mod memory_reducer;
 pub mod relationship_reducer;
 pub mod state_reducer;
 
 pub use arc_reducer::apply_arc_increment;
+pub use event_reducer::process_event;
 pub use memory_reducer::record_memories;
 pub use relationship_reducer::apply_relationship_change;
 pub use state_reducer::apply_state_change;
@@ -135,4 +137,18 @@ CREATE TABLE IF NOT EXISTS emotional_memories (
     intensity       REAL DEFAULT 0.5,
     trigger_summary TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);";
+
+/// domain_events 表 DDL (M2.11 测试用).
+pub const DOMAIN_EVENTS_DDL: &str = "
+CREATE TABLE IF NOT EXISTS domain_events (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    cycle_id      TEXT NOT NULL,
+    event_type    TEXT NOT NULL,
+    actor_id      TEXT,
+    target_id     TEXT,
+    importance    REAL DEFAULT 0.5,
+    summary       TEXT,
+    payload       TEXT DEFAULT '{}',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );";
