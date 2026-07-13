@@ -2,12 +2,13 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REALMS_DIR="$(dirname "$SCRIPT_DIR")"
+REALMS_DIR="$SCRIPT_DIR"
 AIRP_DIR="$REALMS_DIR/AIRP"
 AIRP_MCP_DIR="$REALMS_DIR/AIRP-MCP-Server"
 AIRP_SP_DIR="$REALMS_DIR/AIRP-State-Protocol"
 TAVERN_DIR="$REALMS_DIR/tavern2agent"
-WEBUI_DIR="$SCRIPT_DIR/webui"
+CORE_DIR="$REALMS_DIR/realms-core"
+WEBUI_DIR="$CORE_DIR/webui"
 ENGINE_PORT=8000
 API_PORT=3000
 WEBUI_PORT="${WEBUI_PORT:-5173}"
@@ -52,7 +53,7 @@ echo "  OK (PID $ENGINE_PID)"
 
 # 2. Realms API Server (胶水层)
 echo "[2/3] Realms API Server (port $API_PORT)..."
-cd "$SCRIPT_DIR"
+cd "$CORE_DIR"
 if [ ! -f target/debug/realms-server ]; then
   echo "  首次编译 API Server..."
   cargo build --bin realms-server 2>&1 | tail -3

@@ -19,7 +19,7 @@
 
 ```bash
 git clone git@github.com:Administrator-00/RealmsRP.git
-cd RealmsRP/realms-core
+cd RealmsRP
 ./start.sh
 ```
 
