@@ -30,7 +30,7 @@ pub fn record_memories(tx: &Transaction<'_>, event: &DomainEvent) -> Result<Vec<
     if let Some(a) = actor {
         if !a.is_empty() {
             tx.execute(
-                "INSERT INTO episodic_memories (cycle_id, character_id, event_summary) VALUES (?1,?2,?3)",
+                "INSERT INTO episodic_memories (cycle_id, character_id, content) VALUES (?1,?2,?3)",
                 params![cycle_id, a, summary],
             )?;
             patches.push(PatchOp::add(
@@ -45,7 +45,7 @@ pub fn record_memories(tx: &Transaction<'_>, event: &DomainEvent) -> Result<Vec<
     if let Some(t) = target {
         if !t.is_empty() && Some(t) != actor {
             tx.execute(
-                "INSERT INTO episodic_memories (cycle_id, character_id, event_summary) VALUES (?1,?2,?3)",
+                "INSERT INTO episodic_memories (cycle_id, character_id, content) VALUES (?1,?2,?3)",
                 params![cycle_id, t, summary],
             )?;
             patches.push(PatchOp::add(
@@ -61,7 +61,7 @@ pub fn record_memories(tx: &Transaction<'_>, event: &DomainEvent) -> Result<Vec<
         if let Some(a) = actor {
             let tgt = target.unwrap_or("unknown");
             tx.execute(
-                "INSERT INTO emotional_memories (cycle_id, character_id, target_id, emotion_type, trigger_summary) VALUES (?1,?2,?3,?4,?5)",
+                "INSERT INTO emotional_memories (cycle_id, character_id, target_id, emotion_type, context) VALUES (?1,?2,?3,?4,?5)",
                 params![cycle_id, a, tgt, emotion_type, summary],
             )?;
             patches.push(PatchOp::add(

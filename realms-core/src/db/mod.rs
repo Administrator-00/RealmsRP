@@ -5,6 +5,8 @@
 //!
 //! 详见 3.md §2.2 完整 schema.
 
+pub mod migration;
 pub mod pool;
+pub mod queries;
 
 pub use pool::{init_pool, DbPool};

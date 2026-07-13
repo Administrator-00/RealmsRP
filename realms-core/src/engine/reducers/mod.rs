@@ -112,7 +112,8 @@ CREATE TABLE IF NOT EXISTS episodic_memories (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     cycle_id         TEXT NOT NULL,
     character_id     TEXT NOT NULL,
-    event_summary    TEXT NOT NULL,
+    event_id          INTEGER,
+    content           TEXT NOT NULL,
     emotional_valence REAL DEFAULT 0.0,
     vividness        REAL DEFAULT 1.0,
     created_at       TEXT NOT NULL DEFAULT (datetime('now'))
@@ -135,7 +136,7 @@ CREATE TABLE IF NOT EXISTS emotional_memories (
     target_id       TEXT,
     emotion_type    TEXT NOT NULL,
     intensity       REAL DEFAULT 0.5,
-    trigger_summary TEXT,
+    context         TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );";
 

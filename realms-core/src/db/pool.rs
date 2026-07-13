@@ -62,11 +62,9 @@ fn init_connection(conn: &mut Connection) -> rusqlite::Result<()> {
     )
 }
 
-/// 跑 migrations (M4.1 实现, M2 阶段先放空架子)
-fn run_migrations(_pool: &DbPool) -> Result<()> {
-    // TODO M4.1: 跑 0001_init.sql (含 meta / cycles / character_states /
-    // npc_user_relationships / domain_events / 3 层记忆 / FTS5 / 触发器)
-    Ok(())
+/// 跑 migrations (M4.3 实现)
+fn run_migrations(pool: &DbPool) -> Result<()> {
+    crate::db::migration::run(pool)
 }
 
 #[cfg(test)]
