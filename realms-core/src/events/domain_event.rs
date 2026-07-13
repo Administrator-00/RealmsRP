@@ -386,6 +386,20 @@ impl DomainEvent {
             | Self::Combat { summary, .. } => summary,
         }
     }
+
+    /// 是否由系统/DM 产生 (非 NPC/User 行为).
+    ///
+    /// Setup 一定是系统事件; ArcIncrement/StateChange/Dialogue 中
+    /// actor_type=System 的视为系统事件; 其余 variant 不是.
+    pub fn is_system_actor(&self) -> bool {
+        match self {
+            Self::Setup { .. } => true,
+            Self::ArcIncrement { actor_type, .. }
+            | Self::StateChange { actor_type, .. }
+            | Self::Dialogue { actor_type, .. } => matches!(actor_type, ActorType::System),
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -523,5 +537,60 @@ mod tests {
             assert_eq!(ev.event_type(), et);
             assert!(ev.validate().is_ok());
         }
+    }
+
+    #[test]
+    fn system_actor_detection() {
+        // Setup 总是系统事件
+        assert!(DomainEvent::Setup {
+            cycle_id: "c".into(),
+            perspective_id: "p".into(),
+            gm_id: "g".into(),
+            templates_applied: vec![],
+        }
+        .is_system_actor());
+
+        // Dialogue with System actor
+        assert!(DomainEvent::Dialogue {
+            cycle_id: "c".into(),
+            actor_id: "sys".into(),
+            actor_type: ActorType::System,
+            target_id: None,
+            target_type: TargetType::None,
+            location_id: None,
+            line: "...".into(),
+            world_time: None,
+            importance: 0.5,
+            summary: "sys".into(),
+        }
+        .is_system_actor());
+
+        // Dialogue with Npc actor → 不是系统事件
+        assert!(!DomainEvent::Dialogue {
+            cycle_id: "c".into(),
+            actor_id: "npc".into(),
+            actor_type: ActorType::Npc,
+            target_id: None,
+            target_type: TargetType::None,
+            location_id: None,
+            line: "...".into(),
+            world_time: None,
+            importance: 0.5,
+            summary: "npc".into(),
+        }
+        .is_system_actor());
+
+        // Combat → 不是系统事件
+        assert!(!DomainEvent::Combat {
+            cycle_id: "c".into(),
+            attacker_id: "a".into(),
+            defender_id: "d".into(),
+            outcome: "win".into(),
+            damage_dealt: 10,
+            world_time: None,
+            importance: 0.5,
+            summary: "fight".into(),
+        }
+        .is_system_actor());
     }
 }

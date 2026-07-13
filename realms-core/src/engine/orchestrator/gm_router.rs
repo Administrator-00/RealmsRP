@@ -214,6 +214,114 @@ pub fn dispatch_role_subagent(
     })
 }
 
+// ============================================================================
+// M2.5: hiddenPublicPolicy — 第 2 重防护
+// ============================================================================
+
+/// Hidden public policy: 在 M2.4 `filter_events_for_role` 之上叠加三层可配置过滤.
+///
+/// 默认三 false (最严格隔离):
+/// - `can_see_secrets`: 允许看到 importance > 0.8 的高敏感事件 (即使 NPC 非 actor/target)
+/// - `can_see_other_intent`: 允许看到其他 NPC 之间的对话 (NPC 非 speaker 也非 target)
+/// - `can_see_dm_internal`: 允许看到 DM orchestrator 内部事件 (Setup 等系统事件)
+///
+/// 这个结构实现了 tavern2agent 的 hiddenPublicPolicy 概念:
+/// "GM 派发前过滤角色不该看的信息" (3.md §7)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicPolicy {
+    /// NPC 能否看到秘密事件 (importance > 0.8 且 NPC 非 actor/target)
+    pub can_see_secrets: bool,
+    /// NPC 能否看到其他 NPC 之间的对话
+    pub can_see_other_intent: bool,
+    /// NPC 能否看到 DM orchestrator 内部事件 (Setup / System actor)
+    pub can_see_dm_internal: bool,
+}
+
+impl Default for PublicPolicy {
+    /// 默认: 三 false, 最严格隔离
+    fn default() -> Self {
+        Self {
+            can_see_secrets: false,
+            can_see_other_intent: false,
+            can_see_dm_internal: false,
+        }
+    }
+}
+
+/// 在 M2.4 事件过滤之上叠加 PublicPolicy 第二层过滤.
+///
+/// 第一层 (`filter_events_for_role`): NPC 是 actor/target → 可见; Setup/TimeAdvance → 环境级.
+/// 第二层 (本函数): 根据 policy 进一步排除或放行特定事件.
+///
+/// # 示例
+///
+/// ```
+/// use realms_core::events::domain_event::{DomainEvent, ActorType, TargetType};
+/// use realms_core::engine::orchestrator::gm_router::{filter_events_with_policy, PublicPolicy};
+///
+/// // 系统事件 (actor_type=System) — 默认 policy 对非 actor/target NPC 不可见
+/// let ev = DomainEvent::StateChange {
+///     cycle_id: "c".into(),
+///     actor_id: "dm".into(),
+///     actor_type: ActorType::System,
+///     target_id: None,
+///     target_type: TargetType::None,
+///     field: "world_time".into(),
+///     old_value: None,
+///     new_value: "子时".into(),
+///     world_time: None,
+///     importance: 0.2,
+///     summary: "DM 推进时间".into(),
+/// };
+///
+/// let events = [ev.clone()];
+///
+/// // 默认 policy: DM 内部事件, 非 actor/target NPC 不可见
+/// let policy = PublicPolicy::default();
+/// assert_eq!(filter_events_with_policy(&events, "npc", &policy).len(), 0);
+///
+/// // can_see_dm_internal=true: NPC 也能看到系统事件
+/// let open = PublicPolicy { can_see_dm_internal: true, ..PublicPolicy::default() };
+/// assert_eq!(filter_events_with_policy(&events, "npc", &open).len(), 1);
+/// ```
+pub fn filter_events_with_policy<'a>(
+    events: &'a [DomainEvent],
+    npc_id: &str,
+    policy: &PublicPolicy,
+) -> Vec<&'a DomainEvent> {
+    events
+        .iter()
+        .filter(|ev| is_visible_with_policy(ev, npc_id, policy))
+        .collect()
+}
+
+/// 判断单个事件是否满足 (M2.4 基础规则 or M2.5 policy 放行).
+fn is_visible_with_policy(ev: &DomainEvent, npc_id: &str, policy: &PublicPolicy) -> bool {
+    // M2.4 基础规则: NPC 是 actor/target, 或环境级事件
+    if is_event_visible_to(ev, npc_id) {
+        return true;
+    }
+
+    // M2.5 policy 扩展:
+
+    // can_see_dm_internal: 放行系统/DM 事件
+    if policy.can_see_dm_internal && ev.is_system_actor() {
+        return true;
+    }
+
+    // can_see_secrets: 放行高重要性秘密事件
+    if policy.can_see_secrets && ev.importance() > 0.8 {
+        return true;
+    }
+
+    // can_see_other_intent: 放行 NPC 间的对话
+    if policy.can_see_other_intent && matches!(ev.event_type(), EventType::Dialogue) {
+        return true;
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -517,5 +625,121 @@ mod tests {
         let result = format_visible_events(&events);
         assert!(result.contains("1. A"));
         assert!(result.contains("2. B"));
+    }
+
+    // ========== M2.5: PublicPolicy 过滤 ==========
+
+    #[test]
+    fn policy_default_all_false() {
+        let p = PublicPolicy::default();
+        assert!(!p.can_see_secrets);
+        assert!(!p.can_see_other_intent);
+        assert!(!p.can_see_dm_internal);
+    }
+
+    #[test]
+    fn policy_default_strict_isolation() {
+        // 默认 policy: NPC 看不到别人的对话
+        let events = [make_dialogue("xiaoyao", "zhao_linger", "李→赵")];
+        let visible = filter_events_with_policy(&events, "lin_yueru", &PublicPolicy::default());
+        assert_eq!(visible.len(), 0, "默认 policy 不应让第三方看到别人的对话");
+    }
+
+    #[test]
+    fn policy_can_see_other_intent_reveals_dialogue() {
+        let policy = PublicPolicy {
+            can_see_other_intent: true,
+            ..PublicPolicy::default()
+        };
+        let events = [make_dialogue("xiaoyao", "zhao_linger", "李→赵")];
+        // 林月如非 actor/target, 但 policy 放行
+        let visible = filter_events_with_policy(&events, "lin_yueru", &policy);
+        assert_eq!(visible.len(), 1);
+    }
+
+    #[test]
+    fn policy_can_see_dm_internal_reveals_system_events() {
+        let policy = PublicPolicy {
+            can_see_dm_internal: true,
+            ..PublicPolicy::default()
+        };
+        // 系统事件 (actor_type=System, NPC 非 actor/target)
+        let ev = DomainEvent::StateChange {
+            cycle_id: "c".into(),
+            actor_id: "dm".into(),
+            actor_type: ActorType::System,
+            target_id: None,
+            target_type: TargetType::None,
+            field: "time".into(),
+            old_value: None,
+            new_value: "子时".into(),
+            world_time: None,
+            importance: 0.2,
+            summary: "DM 推进时间".into(),
+        };
+        let events_a = [ev.clone()];
+        let visible = filter_events_with_policy(&events_a, "npc", &PublicPolicy::default());
+        assert_eq!(visible.len(), 0, "默认 policy: 系统事件不可见");
+        let events_b = [ev];
+        let visible_open = filter_events_with_policy(&events_b, "npc", &policy);
+        assert_eq!(visible_open.len(), 1, "can_see_dm_internal: 系统事件可见");
+    }
+
+    #[test]
+    fn policy_can_see_secrets_reveals_high_importance() {
+        let policy = PublicPolicy {
+            can_see_secrets: true,
+            ..PublicPolicy::default()
+        };
+        // 高重要性事件, NPC 非 actor/target
+        let ev = DomainEvent::Combat {
+            cycle_id: "c".into(),
+            attacker_id: "xiaoyao".into(),
+            defender_id: "zhao_linger".into(),
+            outcome: "win".into(),
+            damage_dealt: 999,
+            world_time: None,
+            importance: 0.9,
+            summary: "关键战斗".into(),
+        };
+        let events = [ev];
+        let visible = filter_events_with_policy(&events, "lin_yueru", &policy);
+        assert_eq!(visible.len(), 1, "高重要性秘密事件应被放行");
+    }
+
+    #[test]
+    fn policy_no_secrets_blocks_high_importance() {
+        let policy = PublicPolicy::default(); // can_see_secrets = false
+        let ev = DomainEvent::Combat {
+            cycle_id: "c".into(),
+            attacker_id: "xiaoyao".into(),
+            defender_id: "zhao_linger".into(),
+            outcome: "win".into(),
+            damage_dealt: 999,
+            world_time: None,
+            importance: 0.9,
+            summary: "关键战斗".into(),
+        };
+        let events = [ev];
+        let visible = filter_events_with_policy(&events, "lin_yueru", &policy);
+        assert_eq!(visible.len(), 0, "无 secrets 权限不应看到高重要性事件");
+    }
+
+    #[test]
+    fn policy_does_not_block_own_events() {
+        // 即使 policy 全 false, NPC 自己的事件始终可见 (M2.4 基础规则)
+        let policy = PublicPolicy::default();
+        let events = [make_dialogue("lin_yueru", "xiaoyao", "林→李")];
+        let visible = filter_events_with_policy(&events, "lin_yueru", &policy);
+        assert_eq!(visible.len(), 1, "NPC 自己的对话始终可见");
+    }
+
+    #[test]
+    fn policy_does_not_block_ambient_events() {
+        // 环境级事件 (Setup/TimeAdvance) 始终可见, 不受 policy 限制
+        let policy = PublicPolicy::default();
+        let events = [make_setup(), make_time_advance()];
+        let visible = filter_events_with_policy(&events, "npc", &policy);
+        assert_eq!(visible.len(), 2, "Setup/TimeAdvance 环境级事件始终可见");
     }
 }

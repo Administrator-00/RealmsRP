@@ -11,6 +11,6 @@ pub mod prompt_assembler;
 pub use prompt_assembler::{build_system_prompt, PromptContext};
 // 重新导出 gm_router 的核心 API
 pub use gm_router::{
-    build_subagent_context, dispatch_role_subagent, filter_events_for_role, RoleDispatchRequest,
-    RoleDispatchResult,
+    build_subagent_context, dispatch_role_subagent, filter_events_for_role,
+    filter_events_with_policy, PublicPolicy, RoleDispatchRequest, RoleDispatchResult,
 };
