@@ -1,0 +1,24 @@
+{
+  "locations": [
+    {"id": "yuhang_town", "name": "余杭镇", "type": "town", "description": "江南水乡小镇，盛帆客栈所在", "connections": ["xianling_island", "suzhou_city"]},
+    {"id": "xianling_island", "name": "仙灵岛", "type": "wilderness", "description": "海外仙岛，桃花盛开", "connections": ["yuhang_town"]},
+    {"id": "suzhou_city", "name": "苏州城", "type": "city", "description": "江南大城，林家堡所在", "connections": ["yuhang_town", "shushan"]},
+    {"id": "shushan", "name": "蜀山", "type": "realm", "description": "修仙圣地，蜀山派所在", "connections": ["suzhou_city", "suoyao_tower"]},
+    {"id": "suoyao_tower", "name": "锁妖塔", "type": "dungeon", "description": "九层禁地，镇压妖魔", "connections": ["shushan"]},
+    {"id": "shengfan_inn", "name": "盛帆客栈", "type": "building", "description": "余杭镇最大客栈，李逍遥长大的地方", "connections": ["yuhang_town"]},
+    {"id": "lin_fortress", "name": "林家堡", "type": "building", "description": "江南武林世家，林天南府邸", "connections": ["suzhou_city"]},
+    {"id": "zuixian_tavern", "name": "醉仙楼", "type": "building", "description": "苏州城最热闹的酒楼", "connections": ["suzhou_city"]},
+    {"id": "nanzhao_kingdom", "name": "南诏国", "type": "realm", "description": "西南古国，赵灵儿故乡", "connections": ["shushan"]},
+    {"id": "shuimosho_lair", "name": "水魔兽巢穴", "type": "dungeon", "description": "上古凶兽的栖息之地", "connections": ["nanzhao_kingdom", "xianling_island"]},
+    {"id": "yuhang_wharf", "name": "余杭码头", "type": "town", "description": "通往仙灵岛的唯一渡口", "connections": ["yuhang_town", "xianling_island"]},
+    {"id": "shushan_gate", "name": "蜀山山门", "type": "building", "description": "蜀山派入口，有守山弟子把守", "connections": ["shushan"]},
+    {"id": "jian_sanctum", "name": "剑圣居", "type": "building", "description": "独孤剑圣的清修之处", "connections": ["shushan"]},
+    {"id": "suzhou_market", "name": "苏州集市", "type": "town", "description": "繁华的商街，可购买武器药品", "connections": ["suzhou_city"]},
+    {"id": "wilderness_path", "name": "荒野小径", "type": "wilderness", "description": "苏州通往蜀山的山路，常有妖兽出没", "connections": ["suzhou_city", "shushan"]},
+    {"id": "lotus_pond", "name": "莲花池", "type": "wilderness", "description": "仙灵岛上的圣池，赵灵儿修炼之地", "connections": ["xianling_island"]},
+    {"id": "secret_passage", "name": "密道", "type": "dungeon", "description": "盛帆客栈后院的秘密通道", "connections": ["shengfan_inn", "yuhang_wharf"]},
+    {"id": "ancient_ruins", "name": "上古遗迹", "type": "dungeon", "description": "女娲族留下的远古遗迹，记载着水魔兽的秘密", "connections": ["nanzhao_kingdom"]},
+    {"id": "fengdu_city", "name": "酆都", "type": "city", "description": "鬼城，阴阳交界之地", "connections": ["shushan"]},
+    {"id": "cloud_summit", "name": "云巅", "type": "realm", "description": "蜀山最高处，可俯瞰天下", "connections": ["shushan"]}
+  ]
+}

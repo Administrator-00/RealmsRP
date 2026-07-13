@@ -146,7 +146,7 @@ fn audit_detects_crosstalk_in_mock_dispatch() {
 #[test]
 fn mock_full_dispatch_no_crosstalk() {
     use realms_core::engine::orchestrator::gm_dispatcher::{full_dispatch, MockLlmProvider};
-    use realms_core::engine::orchestrator::gm_router::{RoleToolWhitelist};
+    use realms_core::engine::orchestrator::gm_router::RoleToolWhitelist;
     use tokio::runtime::Runtime;
 
     let rt = Runtime::new().unwrap();

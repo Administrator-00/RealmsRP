@@ -1,0 +1,32 @@
+{
+  "combat": {
+    "hp_formula": "base_hp + level * 20",
+    "mp_formula": "base_mp + level * 10",
+    "damage_formula": "attack * (1 + skill_power / 100) - defense / 2",
+    "critical_chance": 0.05,
+    "flee_chance": 0.3
+  },
+  "cultivation": {
+    "levels": [
+      {"level": 1, "name": "练气", "exp_required": 0},
+      {"level": 2, "name": "筑基", "exp_required": 100},
+      {"level": 3, "name": "金丹", "exp_required": 300},
+      {"level": 4, "name": "元婴", "exp_required": 600},
+      {"level": 5, "name": "化神", "exp_required": 1000}
+    ],
+    "exp_per_battle": 20,
+    "skill_unlock": {
+      "御剑术": 1,
+      "万剑诀": 3,
+      "酒神咒": 4
+    }
+  },
+  "reputation": {
+    "max": 100,
+    "min": -100,
+    "villain_threshold": -50,
+    "hero_threshold": 50
+  },
+  "start_time": "景天元年 三月初一 辰时",
+  "time_scale": "1_turn = 1_hour"
+}
