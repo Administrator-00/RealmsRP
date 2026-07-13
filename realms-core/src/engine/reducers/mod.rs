@@ -11,10 +11,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 pub mod arc_reducer;
+pub mod memory_reducer;
 pub mod relationship_reducer;
 pub mod state_reducer;
 
 pub use arc_reducer::apply_arc_increment;
+pub use memory_reducer::record_memories;
 pub use relationship_reducer::apply_relationship_change;
 pub use state_reducer::apply_state_change;
 
@@ -100,4 +102,37 @@ CREATE TABLE IF NOT EXISTS relationship_history (
     event_id    INTEGER,
     world_time  TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);";
+
+/// 3 层记忆表 DDL (M2.10 测试用).
+pub const MEMORY_DDL: &str = "
+CREATE TABLE IF NOT EXISTS episodic_memories (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    cycle_id         TEXT NOT NULL,
+    character_id     TEXT NOT NULL,
+    event_summary    TEXT NOT NULL,
+    emotional_valence REAL DEFAULT 0.0,
+    vividness        REAL DEFAULT 1.0,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS semantic_memories (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    cycle_id    TEXT NOT NULL,
+    character_id TEXT,
+    category    TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    confidence  REAL DEFAULT 1.0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS emotional_memories (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    cycle_id        TEXT NOT NULL,
+    character_id    TEXT NOT NULL,
+    target_id       TEXT,
+    emotion_type    TEXT NOT NULL,
+    intensity       REAL DEFAULT 0.5,
+    trigger_summary TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );";
