@@ -1,33 +1,26 @@
 # Realms 项目状态
 
-> 最后更新: 2026-07-13, Session #3 (M2.1-M2.6 + M4.2 完成)
+> 最后更新: 2026-07-13, Session #3 (M2 进度 7/11)
 
 ## 当前阶段
 
-**M2 (GM 编排器) 6/11 子任务完成** ✅ gm_router 三重防护就绪, 准备 M2.7 首个 reducer
+**M2.7 完成** ✅ state_reducer 就绪, 准备 M2.8 relationship_reducer
 
 ## 已完成
 
-- [x] Session #1 — 架构/技术栈/工具链/克隆/骨架
-- [x] Session #2 — M0 + M1 全部完成
-- [x] Session #3
-  - [x] 术语统一 DM→GM, `gm_router.rs` 命名收口
-  - [x] **M2.1** Cargo 骨架 (RealmsError 10 variant)
-  - [x] **M2.2** DomainEvent 9 variant + validate() + is_system_actor()
-  - [x] **M4.2** SQLite 连接池 (WAL + foreign_keys)
-  - [x] **M2.3** prompt_assembler — 7 段 GM 拼接 (ADR-0004)
-  - [x] **M2.4** gm_router 第1重防护 — 独立 context + event filter (ADR-0005)
-  - [x] **M2.5** gm_router 第2重防护 — PublicPolicy 叠加过滤 (ADR-0006)
-  - [x] **M2.6** gm_router 第3重防护 — RoleCapability 工具白名单
-    - 4 项能力 (LookupSelf/Location/Rule + SuggestEvent)
-    - NPC 默认无写入能力, 状态变更归口 GM → reducer
+- [x] M2.1-M2.6: Cargo 骨架 + DomainEvent + pool + prompt_assembler + gm_router 三重防护
+- [x] **M2.7** state_reducer — 处理 StateChange, 写 character_states
+  - 6 字段: hp/mp (i64) / location_id / arc_phase / mood / status_flag (JSON merge)
+  - UPSERT 模式: INSERT OR IGNORE 默认值 → UPDATE 指定字段
+  - 产出 PatchOp (RFC6902 replace, JSON Pointer 路径)
+  - 10 单元测试 (CRUD + 错误) + 4 merge_json_flags 纯函数测试
+- [x] PatchOp 共享类型 (reducers/mod.rs), CHARACTER_STATES_DDL 测试用 schema
 
 ## 待开始
 
-- **M2.7** state_reducer — 处理 StateChange, 写 character_states
-- **M2.8** relationship_reducer — 处理 RelationshipChange
-- **M2.9** arc_reducer — 处理 ArcIncrement + 判定 arc_phase
-- **M2.10** memory_reducer — 写 3 层记忆 (episodic/semantic/emotional)
+- **M2.8** relationship_reducer — RelationshipChange → npc_user_relationships + history
+- **M2.9** arc_reducer — ArcIncrement + 判定 arc_phase
+- **M2.10** memory_reducer — 3 层记忆写入
 - **M2.11** event_reducer — 主入口串接 9 variant + 单事务
 - M3-M11 ...
 
@@ -35,13 +28,11 @@
 
 | 模块 | 测试数 |
 |---|---|
-| error.rs | 5 |
-| domain_event.rs | 9 (含 is_system_actor) |
-| pool.rs | 3 |
-| prompt_assembler.rs | 12 (含 1 ignore) |
+| error / domain_event / pool / lib | 19 |
+| prompt_assembler.rs | 12 |
 | gm_router.rs | 27 + 2 doctest |
-| lib.rs | 2 |
-| **合计** | **59 unit + 2 doctest** |
+| state_reducer.rs | 14 |
+| **合计** | **73 unit + 2 doctest** |
 
 ## 决策记录
 
@@ -49,5 +40,5 @@
 
 ## 下次 session 起点
 
-**M2.7 state_reducer**: 处理 `DomainEvent::StateChange`, 写 `character_states` 表 (SQL),
-产出 RFC6902 patch. 3+ 单测 (单事务 / 产出 patch).
+**M2.8 relationship_reducer**: 处理 RelationshipChange, 写 npc_user_relationships +
+relationship_history. 3+ 单测 (单事务 / 产出 patch / history 追加).
