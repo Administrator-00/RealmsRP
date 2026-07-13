@@ -414,10 +414,20 @@ mod tests {
     }
 
     // ===== M7.5: 真实 LLM 集成测试 (需运行中的 AIRP engine) =====
+    //
+    // 运行方式:
+    //   cargo test integration_real_llm -- --nocapture --ignored
+    //
+    // 验证链: LLM dispatch → process_event 落盘 → 查三层记忆
 
     #[tokio::test]
     #[ignore = "需要运行中的 AIRP engine + 已配置 LLM provider"]
     async fn integration_real_llm_subagent_dispatch() {
+        use crate::db::pool::init_memory_pool;
+        use crate::engine::reducers::process_event;
+        use crate::events::domain_event::{ActorType, DomainEvent, TargetType};
+
+        // ── Step 1: LLM dispatch ──
         let provider = HttpLlmProvider::new("http://127.0.0.1:8000");
         let whitelist = RoleToolWhitelist::npc_default();
 
@@ -433,12 +443,99 @@ mod tests {
             .await
             .expect("real LLM dispatch");
 
-        println!("=== visible_response ===\n{}", result.visible_response);
-        println!("=== private_intent ===\n{}", result.private_intent);
-        println!("=== suggested_events ===\n{:?}", result.suggested_events);
-        println!("=== audit_warnings ===\n{:?}", result.audit_warnings);
+        println!("═══════════ LLM 输出 ═══════════");
+        println!("【visible】 {}", result.visible_response);
+        println!("【intent 】 {}", result.private_intent);
+        println!("【events 】 {:?}", result.suggested_events);
+        println!("【audit  】 {:?}", result.audit_warnings);
 
-        assert!(!result.visible_response.is_empty(), "LLM 应返回可见回复");
-        assert!(result.visible_response.len() > 5, "回复过短");
+        assert!(!result.visible_response.is_empty());
+        assert!(result.visible_response.len() > 5);
+
+        // ── Step 2: 创建 DomainEvent → process_event 落盘 ──
+        let pool = init_memory_pool().expect("pool");
+        let conn = pool.get().unwrap();
+        conn.execute_batch(&format!(
+            "{}\n{}\n{}\n{}",
+            crate::engine::reducers::CHARACTER_STATES_DDL,
+            crate::engine::reducers::RELATIONSHIP_DDL,
+            crate::engine::reducers::MEMORY_DDL,
+            crate::engine::reducers::DOMAIN_EVENTS_DDL,
+        ))
+        .expect("schema");
+
+        let event = DomainEvent::Dialogue {
+            cycle_id: "manual_c1".into(),
+            actor_id: "npc_innkeeper".into(),
+            actor_type: ActorType::Npc,
+            target_id: Some("user".into()),
+            target_type: TargetType::User,
+            location_id: Some("yuhang_town".into()),
+            line: result.visible_response.clone(),
+            world_time: Some("午时".into()),
+            importance: 0.5,
+            summary: format!(
+                "客栈老板: {}",
+                &result.visible_response.chars().take(40).collect::<String>()
+            ),
+        };
+
+        let patches = process_event(&pool, &event).expect("process_event");
+        println!("\n═══════════ Patches ({}) ═══════════", patches.len());
+        for p in &patches {
+            println!("  {} {} → {:?}", p.op, p.path, p.value);
+        }
+
+        // ── Step 3: 查三层记忆 ──
+        println!("\n═══════════ L1 情景记忆 ═══════════");
+        let mut stmt = conn
+            .prepare("SELECT id, character_id, content FROM episodic_memories WHERE cycle_id='manual_c1'")
+            .unwrap();
+        let rows: Vec<(i64, String, String)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        for (id, cid, content) in &rows {
+            println!("  [{id}] {cid:>16} | {content}");
+        }
+        let epi_count = rows.len();
+        println!("  → 共 {epi_count} 条\n");
+
+        println!("═══════════ L2 语义记忆 ═══════════");
+        let sem: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM semantic_memories WHERE cycle_id='manual_c1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        println!("  → 共 {sem} 条 (语义层写入待补)\n");
+
+        println!("═══════════ L3 情感记忆 ═══════════");
+        let mut stmt = conn
+            .prepare("SELECT id, character_id, target_id, emotion_type, intensity, context FROM emotional_memories WHERE cycle_id='manual_c1'")
+            .unwrap();
+        let rows: Vec<(i64, String, String, String, f64, String)> = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                ))
+            })
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        for (id, cid, tid, etype, inten, ctx) in &rows {
+            println!("  [{id}] {cid:>16} → {tid:>8} | {etype:>8} i={inten} | {ctx}");
+        }
+        let _emo = rows.len();
+        println!("  → 共 {epi_count} 条\n");
+
+        assert!(epi_count >= 2, "应至少 2 条 episodic (actor+target)");
     }
 }
