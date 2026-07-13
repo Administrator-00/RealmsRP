@@ -64,7 +64,7 @@ pub struct RoleDispatchResult {
 ///
 /// 段间用 `\n\n---\n\n` 分隔 (与 prompt_assembler 一致).
 pub fn build_subagent_context(req: &RoleDispatchRequest) -> String {
-    let mut parts = Vec::with_capacity(4);
+    let mut parts = Vec::with_capacity(5);
 
     // 1. 角色人设 (从 npc_base 原文不动)
     parts.push(format!("# 你是\n{}", req.npc_persona));
@@ -84,6 +84,19 @@ pub fn build_subagent_context(req: &RoleDispatchRequest) -> String {
 
     // 4. 玩家的话
     parts.push(format!("# 玩家的话\n{}", req.user_message));
+
+    // 5. 输出格式 (引导 LLM 产出结构化回复)
+    parts.push(
+        "# 你的回应格式\n\
+请严格按以下格式回应：\n\
+[VISIBLE]\n\
+你公开说的话或做的事（叙事文本）\n\
+[INTENT]\n\
+你内心的想法和动机（只有你自己知道，不会透露给其他角色）\n\
+[EVENTS]\n\
+[]  （建议的领域事件，如无则为空数组）"
+            .to_string(),
+    );
 
     parts.join("\n\n---\n\n")
 }
@@ -559,18 +572,20 @@ mod tests {
         };
         let ctx = build_subagent_context(&req);
 
-        // 4 段顺序: 你是 → 世界 → 情境 → 玩家
+        // 5 段顺序: 你是 → 世界 → 情境 → 玩家 → 输出格式
         let pos_you = ctx.find("# 你是").unwrap();
         let pos_world = ctx.find("# 你所在的世界").unwrap();
         let pos_situation = ctx.find("# 当前情境").unwrap();
         let pos_player = ctx.find("# 玩家的话").unwrap();
+        let pos_format = ctx.find("# 你的回应格式").unwrap();
 
         assert!(pos_you < pos_world);
         assert!(pos_world < pos_situation);
         assert!(pos_situation < pos_player);
+        assert!(pos_player < pos_format);
 
-        // 恰好 3 个 SECTION_SEPARATOR (4 段间)
-        assert_eq!(ctx.matches("\n\n---\n\n").count(), 3);
+        // 恰好 4 个 SECTION_SEPARATOR (5 段间)
+        assert_eq!(ctx.matches("\n\n---\n\n").count(), 4);
     }
 
     #[test]
