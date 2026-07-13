@@ -10,8 +10,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
+pub mod relationship_reducer;
 pub mod state_reducer;
 
+pub use relationship_reducer::apply_relationship_change;
 pub use state_reducer::apply_state_change;
 
 /// RFC6902 JSON Patch 操作 — 所有 reducer 的统一产出类型.
@@ -63,4 +65,36 @@ CREATE TABLE IF NOT EXISTS character_states (
     perceived_mood TEXT NOT NULL DEFAULT 'neutral',
     updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (cycle_id, npc_id)
+);";
+
+/// npc_user_relationships + relationship_history 表 DDL (M2.8 测试用).
+pub const RELATIONSHIP_DDL: &str = "
+CREATE TABLE IF NOT EXISTS npc_user_relationships (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    cycle_id             TEXT NOT NULL,
+    npc_id               TEXT NOT NULL,
+    affinity             INTEGER DEFAULT 0,
+    trust                INTEGER DEFAULT 0,
+    intimacy             INTEGER DEFAULT 0,
+    respect              INTEGER DEFAULT 0,
+    current_type         TEXT,
+    initial_template     TEXT,
+    initial_setup_event_id INTEGER,
+    first_met_at         TEXT,
+    last_changed_event_id INTEGER,
+    updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(cycle_id, npc_id)
+);
+
+CREATE TABLE IF NOT EXISTS relationship_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    cycle_id    TEXT NOT NULL,
+    npc_id      TEXT NOT NULL,
+    field       TEXT NOT NULL,
+    old_value   TEXT,
+    new_value   TEXT,
+    delta       INTEGER,
+    event_id    INTEGER,
+    world_time  TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );";
