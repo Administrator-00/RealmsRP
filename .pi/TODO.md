@@ -55,85 +55,138 @@ ls /home/jhwh/src/Realms/realms-core/webui/src/widgets/
 
 | # | 缺口 | 做什么 |
 |---|---|---|
-| **G0** | LLM 只能连 DeepSeek, 不能切换 | HttpLlmProvider 支持多 provider: 通过 AIRP engine 已有的 /v1/settings 热重载接口, 在 start.sh 启动时配置用户选择的 provider (OpenAI/Anthropic 兼容) |
+| **G0** | 配置靠环境变量，不够开箱即用 | WebUI 设置页: 填 provider/endpoint/key/model → 保存到 config.json → 实时生效 (调 engine /v1/settings) |
 | **G2** | Rust 引擎没有 HTTP 接口 | 用 axum 写 HTTP server |
-| **G1** | Vue widget 是孤儿组件 | 写 Vue Router + 主布局 |
-| **G3** | 用户配 provider 不方便 | 通过环境变量 (LLM_PROVIDER/ENDPOINT/API_KEY/MODEL) 配置, start.sh 自动写入 engine |
-| **G4** | 需要手动开终端 | 写 start.sh 一键启动 (启动 engine + realms-server + webui, 自动配 provider) |
+| **G1** | Vue widget 是孤儿组件 | 写 Vue Router + 主布局 (含设置页) |
+| **G4** | 需要手动开终端 | 写 start.sh 一键启动 (启动 engine + realms-server + webui) |
 
-执行顺序: G0 -> G2 -> G1 -> G3 -> G4。最终验收: 设 LLM_API_KEY=xxx, ./start.sh, 浏览器打开 localhost:5173 即玩。
+执行顺序: G0 -> G2 -> G1 -> G4。最终验收: ./start.sh, 浏览器打开 localhost:5173, 在设置页填 API key → 选世界 → 选角色 → 选 GM → 开周目 → 玩。
+
+**关键原则: 所有配置均通过 WebUI 完成，用户不碰文件、不设环境变量。**
 
 ---
 
-## 3. G0: HttpLlmProvider 支持多 LLM Provider
+## 3. G0: WebUI 可配置的 LLM Provider (config.json + 实时生效)
 
-### 3.0 现状
+### 3.0 原则
 
-`HttpLlmProvider` 硬编码了 DeepSeek 配置。AIRP engine 本身**已经支持**通过 `POST /v1/settings` 热重载 provider/endpoint/api_key/model，但目前每次重启需要手动 curl 配。
+用户**不碰文件、不设环境变量**。打开 WebUI → 设置页 → 填 provider/endpoint/key/model → 保存 → 即刻生效。配置持久化到 `data/config.json`，启动时自动加载。
 
-### 3.1 原理
+### 3.1 配置存储
 
-AIRP engine 的 `/v1/settings` 接受：
+`data/config.json` (首次运行自动生成默认值):
 
 ```json
 {
-  "provider": "OpenAI",           // 或 "Anthropic"
-  "endpoint": "https://api.deepseek.com/v1/chat/completions",
-  "api_key": "sk-...",
-  "model": "deepseek-chat"
+  "llm": {
+    "provider": "OpenAI",
+    "endpoint": "https://api.deepseek.com/v1/chat/completions",
+    "api_key": "",
+    "model": "deepseek-chat"
+  }
 }
 ```
 
-用户换模型 = 改这 4 个字段的值。engine 收到后热重载，后续 `/v1/chat/completions` 请求自动走新 provider。
-
-### 3.2 实现
-
-`HttpLlmProvider` 改为接受这 4 个配置参数：
+### 3.2 Rust 侧: `src/server/config.rs` (新建)
 
 ```rust
-pub struct HttpLlmProvider {
-    pub engine_url: String,     // "http://127.0.0.1:8000"
-    pub provider: String,       // "OpenAI" | "Anthropic"
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmConfig {
+    pub provider: String,
     pub endpoint: String,
     pub api_key: String,
     pub model: String,
-    http_client: reqwest::Client,
 }
 
-impl HttpLlmProvider {
-    /// 从环境变量构造
-    /// LLM_PROVIDER  (默认 "OpenAI")
-    /// LLM_ENDPOINT  (默认 "https://api.deepseek.com/v1/chat/completions")
-    /// LLM_API_KEY
-    /// LLM_MODEL     (默认 "deepseek-chat")
-    pub fn from_env() -> Self { ... }
-
-    /// 启动时调用一次: 把配置写入 AIRP engine
-    pub async fn configure_engine(&self) -> Result<()> {
-        self.http_client
-            .post(format!("{}/v1/settings", self.engine_url))
-            .json(&serde_json::json!({
-                "provider": self.provider,
-                "endpoint": self.endpoint,
-                "api_key": self.api_key,
-                "model": self.model,
-            }))
-            .send().await?;
-        Ok(())
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            provider: "OpenAI".into(),
+            endpoint: "https://api.deepseek.com/v1/chat/completions".into(),
+            api_key: String::new(),
+            model: "deepseek-chat".into(),
+        }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppConfig {
+    #[serde(default)]
+    pub llm: LlmConfig,
+}
+
+impl AppConfig {
+    /// 从 data/config.json 加载; 不存在则创建默认
+    pub fn load(data_dir: &Path) -> Result<Self> { ... }
+    /// 保存到 data/config.json
+    pub fn save(&self, data_dir: &Path) -> Result<()> { ... }
 }
 ```
 
-### 3.3 测试
+### 3.3 API 端点 (加在 G2 的 handlers 中)
 
-- 验证 `from_env()` 能正确读取环境变量
-- 验证 `configure_engine()` 发送的 JSON 格式正确
+| 方法 | 路径 | 功能 |
+|---|---|---|
+| GET | `/api/config` | 返回当前配置 (api_key 脱敏: `sk-***xxx`) |
+| PUT | `/api/config` | 更新配置 → 保存 config.json → 调 engine /v1/settings 热重载 |
 
-### 3.4 文件
+PUT 请求体:
+```json
+{
+  "llm": {
+    "provider": "Anthropic",
+    "endpoint": "https://api.anthropic.com/v1/chat/completions",
+    "api_key": "sk-ant-xxx",
+    "model": "claude-sonnet-4-20250514"
+  }
+}
+```
 
-- 修改 `src/engine/orchestrator/gm_dispatcher.rs` (HttpLlmProvider 改签名 + 加 from_env/configure_engine)
-- 修改 `src/bin/server.rs` (启动时调 configure_engine)
-- 已有测试保持兼容 (MockLlmProvider 不受影响)
+处理逻辑:
+1. 验证 provider 是 "OpenAI" 或 "Anthropic"
+2. 验证 endpoint 非空
+3. 保存到 data/config.json
+4. POST engine /v1/settings 热重载
+5. 返回更新后的配置 (api_key 脱敏)
+
+### 3.4 WebUI 设置页 (加在 G1 的 pages 中)
+
+`SettingsPage.vue`:
+
+```
+┌────────────────────────────────────────┐
+│  设置                                   │
+├────────────────────────────────────────┤
+│  LLM Provider                          │
+│  ┌──────────────────────────────────┐  │
+│  │ Provider:  [OpenAI ▾]            │  │
+│  │ Endpoint:  [https://api...     ] │  │
+│  │ API Key:   [••••••••••••••••  ] │  │
+│  │ Model:     [deepseek-chat      ] │  │
+│  └──────────────────────────────────┘  │
+│                                        │
+│  [测试连接]  [保存配置]                  │
+│                                        │
+│  状态: ✅ 连接成功 / ❌ 未配置 / ⏳ 测试中 │
+└────────────────────────────────────────┘
+```
+
+"测试连接" 按钮: 调 `GET /api/config/test` (后端发一个最小 chat 请求验证 key 有效)。
+
+### 3.5 start.sh 更新
+
+不再需要环境变量。`realms-server` 启动时自动从 `data/config.json` 加载配置 (如果 api_key 为空则跳过 engine 配置, WebUI 会提示用户填写)。
+
+### 3.6 文件
+
+- 新建 `src/server/config.rs`
+- 修改 `src/server/state.rs` (加 `config: AppConfig`)
+- 修改 `src/server/handlers.rs` (加 GET/PUT /api/config)
+- 修改 `src/bin/server.rs` (启动时 load config, 如果 api_key 非空则 configure_engine)
+- 新建 `webui/src/pages/SettingsPage.vue`
 
 ---
 
@@ -496,96 +549,6 @@ export async function processTurn(cycleId: string, msg: string): Promise<Readabl
 
 ---
 
-## 5. G3: API Key 持久化
-
-### 5.1 问题
-
-每次 AIRP engine 重启, provider 配置丢失。需要在 `realms-server` 启动时自动配置。
-
-### 5.2 方案
-
-在 `src/bin/server.rs` 的 `main()` 中, 初始化 DB 后、启动 HTTP server 前, 调用:
-
-```rust
-async fn configure_engine(engine_url: &str) {
-    let client = reqwest::Client::new();
-    let _ = client
-        .post(format!("{engine_url}/v1/settings"))
-        .json(&serde_json::json!({
-            "provider": "OpenAI",
-            "endpoint": "https://api.deepseek.com/v1/chat/completions",
-            "api_key": "sk-e39757d64c6b4688b79a6e421e444ae8",
-            "model": "deepseek-chat"
-        }))
-        .send()
-        .await;
-}
-```
-
-调用: `configure_engine("http://127.0.0.1:8000").await;`
-
-### 5.3 进阶 (可选)
-
-把 key 放到环境变量或配置文件:
-
-```rust
-let api_key = std::env::var("DEEPSEEK_KEY")
-    .unwrap_or_else(|_| "sk-e39757d64c6b4688b79a6e421e444ae8".to_string());
-```
-
----
-
-## 7. G3: 环境变量配置 + start.sh 自动配 Provider
-
-### 7.1 问题
-
-用户换 LLM 不应改代码。通过环境变量配置，start.sh 启动时自动写入 AIRP engine。
-
-### 7.2 实现
-
-在 `src/bin/server.rs` 的 `main()` 中，初始化 DB 后、启动 HTTP server 前:
-
-```rust
-let llm = HttpLlmProvider::from_env();  // 读 LLM_PROVIDER/ENDPOINT/API_KEY/MODEL
-llm.configure_engine().await?;          // POST /v1/settings 写入 engine
-```
-
-`HttpLlmProvider::from_env()`:
-
-```rust
-pub fn from_env() -> Self {
-    Self {
-        engine_url: "http://127.0.0.1:8000".into(),
-        provider: env::var("LLM_PROVIDER").unwrap_or_else(|_| "OpenAI".into()),
-        endpoint: env::var("LLM_ENDPOINT")
-            .unwrap_or_else(|_| "https://api.deepseek.com/v1/chat/completions".into()),
-        api_key: env::var("LLM_API_KEY").expect("LLM_API_KEY not set"),
-        model: env::var("LLM_MODEL").unwrap_or_else(|_| "deepseek-chat".into()),
-        http_client: reqwest::Client::new(),
-    }
-}
-```
-
-用户切换 provider 示例:
-
-```bash
-# DeepSeek (默认)
-export LLM_API_KEY=sk-xxx
-
-# OpenAI
-export LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
-export LLM_API_KEY=sk-xxx
-export LLM_MODEL=gpt-4o
-
-# Anthropic
-export LLM_PROVIDER=Anthropic
-export LLM_ENDPOINT=https://api.anthropic.com/v1/chat/completions
-export LLM_API_KEY=sk-ant-xxx
-export LLM_MODEL=claude-sonnet-4-20250514
-```
-
----
-
 ## 8. G4: 一键启动脚本 (开箱即用)
 
 ### 5.1 目标
@@ -594,10 +557,9 @@ export LLM_MODEL=claude-sonnet-4-20250514
 
 脚本自动完成:
 1. 编译并启动 AIRP engine (后台)
-2. 配置 DeepSeek API key (调 /v1/settings)
-3. 编译并启动 realms-server (后台)
-4. 安装 webui 依赖 (首次) + 启动 vite dev server
-5. 打印 `打开浏览器 http://localhost:5173`
+2. 编译并启动 realms-server (后台, 自动从 data/config.json 加载 LLM 配置并调 engine /v1/settings)
+3. 安装 webui 依赖 (首次) + 启动 vite dev server
+4. 打印 `打开浏览器 http://localhost:5173 -> 设置页填 API key -> 开始玩`
 
 ### 8.2 创建 `realms-core/start.sh`
 
@@ -606,55 +568,38 @@ export LLM_MODEL=claude-sonnet-4-20250514
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REALMS_DIR="$(dirname "$SCRIPT_DIR")"  # Realms/ 根目录
+REALMS_DIR="$(dirname "$SCRIPT_DIR")"
 AIRP_DIR="$REALMS_DIR/AIRP"
 WEBUI_DIR="$SCRIPT_DIR/webui"
 ENGINE_PORT=8000
 API_PORT=3000
 WEBUI_PORT=5173
 
-# LLM 配置 (用户通过环境变量覆盖)
-export LLM_PROVIDER="${LLM_PROVIDER:-OpenAI}"
-export LLM_ENDPOINT="${LLM_ENDPOINT:-https://api.deepseek.com/v1/chat/completions}"
-export LLM_MODEL="${LLM_MODEL:-deepseek-chat}"
-if [ -z "$LLM_API_KEY" ]; then
-    echo "ERROR: 请设置 LLM_API_KEY 环境变量"
-    echo "  export LLM_API_KEY=sk-xxx"
-    exit 1
-fi
+echo "=== Realms 启动 ==="
 
-echo "=== Realms 启动 (LLM: $LLM_PROVIDER / $LLM_MODEL) ==="
-
-# ── 1. 启动 AIRP Engine (网关层, 必须) ──
-echo "[1/3] 启动 AIRP Engine (port $ENGINE_PORT)..."
+# 1. AIRP Engine (网关层)
+echo "[1/3] AIRP Engine (port $ENGINE_PORT)..."
 cd "$AIRP_DIR"
 cargo build -p airp-core 2>/dev/null
 nohup cargo run -p airp-core -- daemon --port $ENGINE_PORT > /tmp/realms-engine.log 2>&1 &
 ENGINE_PID=$!
 sleep 8
+curl -s http://localhost:$ENGINE_PORT/health > /dev/null || { echo "Engine 启动失败"; exit 1; }
+echo "  OK (PID $ENGINE_PID)"
 
-if ! curl -s http://localhost:$ENGINE_PORT/health > /dev/null 2>&1; then
-    echo "ERROR: AIRP engine 启动失败"
-    exit 1
-fi
-echo "  Engine OK (PID $ENGINE_PID)"
-
-# ── 2. 启动 Realms API Server (自动调用 configure_engine 配 provider) ──
-echo "[2/3] 启动 Realms API Server (port $API_PORT)..."
+# 2. Realms API Server (从 config.json 加载 LLM 配置并 configure_engine)
+echo "[2/3] Realms API Server (port $API_PORT)..."
 cd "$SCRIPT_DIR"
 cargo build --bin realms-server 2>/dev/null
 nohup cargo run --bin realms-server > /tmp/realms-api.log 2>&1 &
 API_PID=$!
 sleep 5
-echo "  API Server OK (PID $API_PID)"
+echo "  OK (PID $API_PID)"
 
-# ── 3. 启动 WebUI ──
-echo "[3/3] 启动 WebUI (port $WEBUI_PORT)..."
+# 3. WebUI
+echo "[3/3] WebUI (port $WEBUI_PORT)..."
 cd "$WEBUI_DIR"
-if [ ! -d node_modules ]; then
-    echo "  首次运行, 安装依赖..."
-    npm install --silent 2>/dev/null
-fi
+[ -d node_modules ] || npm install --silent 2>/dev/null
 npx vite --port $WEBUI_PORT --host > /tmp/realms-webui.log 2>&1 &
 WEBUI_PID=$!
 sleep 2
@@ -662,8 +607,9 @@ sleep 2
 echo ""
 echo "=============================================="
 echo "  Realms RP 平台已就绪!"
-echo "  LLM: $LLM_PROVIDER / $LLM_MODEL"
 echo "  打开浏览器: http://localhost:$WEBUI_PORT"
+echo "  -> 设置页 填写 LLM API Key -> 保存"
+echo "  -> 选世界 -> 选角色 -> 选 GM -> 开周目 -> 玩"
 echo "  停止: kill $ENGINE_PID $API_PID $WEBUI_PID"
 echo "=============================================="
 
@@ -678,13 +624,8 @@ cd /home/jhwh/src/Realms/realms-core
 chmod +x start.sh
 ./start.sh
 # 浏览器打开 http://localhost:5173
+# 设置页填 API key -> 保存 -> 测试连接 -> 开始玩
 ```
-
-### 5.4 进阶 (可选)
-
-- 把 DEEPSEEK_KEY 放到 `.env` 文件, start.sh source 它
-- 支持 `--release` 参数用 release build
-- 加健康检查循环 (engine 没 ready 时重试)
 
 ---
 
@@ -724,20 +665,22 @@ cd webui && npx vitest run                # 50+ 页面测试
 
 | 顺序 | 任务 | 文件 | 预计 |
 |---|---|---|---|
-| 1 | G0: HttpLlmProvider 支持多 provider (from_env + configure_engine) | `gm_dispatcher.rs` | 30 min |
-| 2 | 加 axum 依赖 | `Cargo.toml` | 5 min |
-| 3 | 写 `server/state.rs` (AppState 含 LlmClient) | 新建 | 10 min |
-| 4 | 写 `server/handlers.rs` (全部端点, turn 用 state.llm) | 新建 | 2-3 hr |
-| 5 | 写 `server/mod.rs` (路由) | 新建 | 15 min |
-| 6 | 写 `bin/server.rs` (入口: init DB + configure_engine + serve) | 新建 | 15 min |
-| 7 | 更新 `lib.rs` 加 `pub mod server` | 修改 | 1 min |
-| 8 | 写 handler 测试 | `handlers.rs` 底部 | 1 hr |
-| 9 | 装 vue-router | `npm install` | 2 min |
-| 10 | 写 `router.ts` + `api.ts` | 新建 | 30 min |
-| 11 | 写 `App.vue` (主布局) | 新建 | 30 min |
-| 12 | 写 6 个 Page 组件 | 新建 | 2 hr |
-| 13 | 写 GamePlayPage 测试 | 新建 | 30 min |
-| 14 | 写 `start.sh` 一键启动脚本 (启动 engine + server + webui) | `start.sh` (新建) | 20 min |
-| 15 | 端到端验证 (`./start.sh` → 浏览器) | 手动 | 10 min |
+| 1 | G0: config.rs (AppConfig load/save) | `src/server/config.rs` (新建) | 30 min |
+| 2 | G0: GET/PUT /api/config + configure_engine | `handlers.rs` | 30 min |
+| 3 | G0: SettingsPage.vue (WebUI 设置页) | `webui/src/pages/` (新建) | 30 min |
+| 4 | G2: 加 axum 依赖 | `Cargo.toml` | 5 min |
+| 5 | G2: 写 server/state.rs (AppState 含 config + pool + paths) | 新建 | 10 min |
+| 6 | G2: 写 server/handlers.rs (全部端点) | 新建 | 2-3 hr |
+| 7 | G2: 写 server/mod.rs (路由) | 新建 | 15 min |
+| 8 | G2: 写 bin/server.rs (入口: load config + init DB + configure_engine + serve) | 新建 | 15 min |
+| 9 | 更新 lib.rs 加 pub mod server | 修改 | 1 min |
+| 10 | 写 handler 测试 | handlers.rs 底部 | 1 hr |
+| 11 | G1: 装 vue-router | npm install | 2 min |
+| 12 | G1: 写 router.ts + api.ts | 新建 | 30 min |
+| 13 | G1: 写 App.vue (主布局, 顶部 Tab 含设置) | 新建 | 30 min |
+| 14 | G1: 写 6 个 Page 组件 | 新建 | 2 hr |
+| 15 | G1: 写 GamePlayPage 测试 | 新建 | 30 min |
+| 16 | G4: 写 start.sh 一键启动 | start.sh (新建) | 20 min |
+| 17 | 端到端验证 (./start.sh → 浏览器 → 设置页填 key → 玩) | 手动 | 15 min |
 
-**总计: ~8-10 小时 (1-2 天)**
+**总计: ~9-11 小时 (2 天)**
