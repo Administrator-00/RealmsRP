@@ -322,6 +322,81 @@ fn is_visible_with_policy(ev: &DomainEvent, npc_id: &str, policy: &PublicPolicy)
     false
 }
 
+// ============================================================================
+// M2.6: tools 白名单 — 第 3 重防护
+// ============================================================================
+
+/// 角色 subagent 可用的工具类别 (3.md §7 第 3 重防护).
+///
+/// 角色 subagent 启动时只被授予白名单内的能力.
+/// 默认 NPC: `LookupSelf | LookupLocation | LookupRule | SuggestEvent`.
+/// 绝对不含 `UpdateState` (状态写入归 GM orchestrator → reducer).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RoleCapability {
+    /// 查询自身状态 (persona, current state, mood, relationships)
+    LookupSelf,
+    /// 查询当前/附近地点信息 (map, location properties, discovered locations)
+    LookupLocation,
+    /// 查询世界规则 / lorebook 条目
+    LookupRule,
+    /// 建议产生领域事件 (由 GM 审核后经 reducer 写入, NPC 不直接写 state)
+    SuggestEvent,
+}
+
+impl RoleCapability {
+    /// 是否属于 "写入" 类能力 (这类能力对 NPC 默认禁用).
+    pub fn is_write_capability(&self) -> bool {
+        // SuggestEvent 是建议, 不是直接写入; 真正写入走 GM → reducer.
+        // 未来如有 UpdateState / ModifyItem 等 variant, 此处返回 true.
+        false
+    }
+
+    /// 人类可读标签.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::LookupSelf => "lookup_self",
+            Self::LookupLocation => "lookup_location",
+            Self::LookupRule => "lookup_rule",
+            Self::SuggestEvent => "suggest_event",
+        }
+    }
+}
+
+/// 角色工具白名单配置.
+///
+/// 在 dispatch subagent 时, 由此 struct 控制该 NPC 能调用的工具集.
+/// `npc_default()` 返回 4 项 lookup+suggest; 如需扩展 (如特定 NPC 可查秘密),
+/// 向上叠加 capability 即可.
+#[derive(Debug, Clone, Default)]
+pub struct RoleToolWhitelist {
+    /// 允许的能力列表
+    pub capabilities: Vec<RoleCapability>,
+}
+
+impl RoleToolWhitelist {
+    /// 默认 NPC 白名单: 仅 lookup + suggest, 不含任何写入能力.
+    pub fn npc_default() -> Self {
+        Self {
+            capabilities: vec![
+                RoleCapability::LookupSelf,
+                RoleCapability::LookupLocation,
+                RoleCapability::LookupRule,
+                RoleCapability::SuggestEvent,
+            ],
+        }
+    }
+
+    /// 检查某个能力是否在白名单中.
+    pub fn allows(&self, cap: RoleCapability) -> bool {
+        self.capabilities.contains(&cap)
+    }
+
+    /// 白名单是否为空 (极端: 禁绝一切工具).
+    pub fn is_empty(&self) -> bool {
+        self.capabilities.is_empty()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,5 +816,49 @@ mod tests {
         let events = [make_setup(), make_time_advance()];
         let visible = filter_events_with_policy(&events, "npc", &policy);
         assert_eq!(visible.len(), 2, "Setup/TimeAdvance 环境级事件始终可见");
+    }
+
+    // ========== M2.6: RoleCapability 工具白名单 ==========
+
+    #[test]
+    fn npc_default_whitelist_has_four_capabilities() {
+        let wl = RoleToolWhitelist::npc_default();
+        assert_eq!(wl.capabilities.len(), 4);
+        // 验证包含 4 项 (不含写入能力)
+        assert!(wl.allows(RoleCapability::LookupSelf));
+        assert!(wl.allows(RoleCapability::LookupLocation));
+        assert!(wl.allows(RoleCapability::LookupRule));
+        assert!(wl.allows(RoleCapability::SuggestEvent));
+    }
+
+    #[test]
+    fn npc_default_has_no_write_capabilities() {
+        let wl = RoleToolWhitelist::npc_default();
+        for cap in &wl.capabilities {
+            assert!(
+                !cap.is_write_capability(),
+                "NPC 默认白名单不应含写入能力: {:?}",
+                cap
+            );
+        }
+    }
+
+    #[test]
+    fn whitelist_allows_and_rejects() {
+        let wl = RoleToolWhitelist::npc_default();
+        assert!(wl.allows(RoleCapability::LookupSelf));
+        // SuggestEvent 是唯一 "接近写入" 的能力, 但它是建议而非直接写入
+        // 确认它在白名单内 (NPC 可以建议事件, 但不能直接写)
+        assert!(wl.allows(RoleCapability::SuggestEvent));
+    }
+
+    #[test]
+    fn empty_whitelist_blocks_all() {
+        let wl = RoleToolWhitelist {
+            capabilities: vec![],
+        };
+        assert!(wl.is_empty());
+        assert!(!wl.allows(RoleCapability::LookupSelf));
+        assert!(!wl.allows(RoleCapability::SuggestEvent));
     }
 }
