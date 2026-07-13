@@ -10,13 +10,6 @@ AIRP-MCP-Server/
 AIRP-State-Protocol/
 tavern2agent/
 
-# Upstream READMEs/AGENTS.md we don't author
-AIRP/AGENTS.md
-AIRP-MCP-Server/README.md
-AIRP-State-Protocol/README.md
-tavern2agent/README.md
-
-
 # Database
 data/
 *.db
@@ -35,8 +28,9 @@ nohup.out
 # OS
 Thumbs.db
 
-# Generated
-realms-core/.pi/agents/*.md
+# Generated (tavern2agent output - we hand-write ours)
+realms-core/.cards/tavern2agent-output/
+realms-core/.pi/tavern2agent-output/
 realms-core/data/
 realms-core/target/
 
