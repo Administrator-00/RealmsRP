@@ -18,8 +18,9 @@ use crate::engine::cycle::{
     perspective,
     world_loader,
 };
-use crate::engine::orchestrator::gm_dispatcher::{self, LlmProvider};
-use crate::server::config::{AppConfig, LlmConfig};
+use crate::engine::orchestrator::gm_dispatcher;
+use crate::engine::orchestrator::LlmProvider;
+use crate::server::config::LlmConfig;
 use crate::server::state::SharedState;
 use crate::error::RealmsError;
 
@@ -108,11 +109,32 @@ pub async fn put_config(
     };
 
     // 加写锁，直接更新内存中的 config 并持久化
-    let mut config = state.config.write().unwrap();
-    config
-        .update_llm(llm, &state.data_dir)
-        .map_err(|e| err_resp(error_status(&e), e.to_string()))?;
+    let (engine_provider, engine_endpoint, engine_api_key, engine_model) = {
+        let mut config = state.config.write().unwrap();
+        config
+            .update_llm(llm, &state.data_dir)
+            .map_err(|e| err_resp(error_status(&e), e.to_string()))?;
+        (
+            config.llm.provider.clone(),
+            config.llm.endpoint.clone(),
+            config.llm.api_key.clone(),
+            config.llm.model.clone(),
+        )
+    };
 
+    // 通知 AIRP engine 热重载 LLM 配置 (锁已释放)
+    let _ = reqwest::Client::new()
+        .post("http://127.0.0.1:8000/v1/settings")
+        .json(&serde_json::json!({
+            "provider": engine_provider,
+            "endpoint": engine_endpoint,
+            "api_key": engine_api_key,
+            "model": engine_model,
+        }))
+        .send()
+        .await;
+
+    let config = state.config.read().unwrap();
     let masked = config.masked_llm();
     Ok(Json(serde_json::json!({
         "llm": {
@@ -128,7 +150,7 @@ pub async fn put_config(
 pub async fn test_config(
     State(state): State<SharedState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let (endpoint, api_key, model) = {
+    {
         let config = state.config.read().unwrap();
         if config.llm.api_key.is_empty() {
             return Ok(Json(serde_json::json!({
@@ -136,19 +158,9 @@ pub async fn test_config(
                 "message": "API key is empty"
             })));
         }
-        (
-            config.llm.endpoint.clone(),
-            config.llm.api_key.clone(),
-            config.llm.model.clone(),
-        )
-    };
+    }
 
-    let provider = HttpTestProvider {
-        endpoint,
-        api_key,
-        model,
-        client: reqwest::Client::new(),
-    };
+    let provider = gm_dispatcher::HttpLlmProvider::new("http://127.0.0.1:8000");
 
     match provider.chat("Reply with just the word 'ok'.", "ping").await {
         Ok(_) => Ok(Json(serde_json::json!({
@@ -549,21 +561,8 @@ pub async fn process_turn(
         }
     }
 
-    // 5. 调用 LLM
-    let (endpoint, api_key, model) = {
-        let config = state.config.read().unwrap();
-        (
-            config.llm.endpoint.clone(),
-            config.llm.api_key.clone(),
-            config.llm.model.clone(),
-        )
-    };
-    let provider = HttpTestProvider {
-        endpoint,
-        api_key,
-        model,
-        client: reqwest::Client::new(),
-    };
+    // 5. 调用 LLM (通过 AIRP Engine 网关)
+    let provider = gm_dispatcher::HttpLlmProvider::new("http://127.0.0.1:8000");
 
     let llm_output = provider
         .chat(&system_prompt, &body.user_message)
@@ -595,61 +594,6 @@ pub async fn health() -> Json<serde_json::Value> {
 }
 
 // ============================================================================
-// HttpLlmProvider for turn processing
-// ============================================================================
-
-/// 简单的 HTTP LLM Provider (内联，不依赖 AIRP engine)
-struct HttpTestProvider {
-    endpoint: String,
-    api_key: String,
-    model: String,
-    client: reqwest::Client,
-}
-
-#[async_trait::async_trait]
-impl LlmProvider for HttpTestProvider {
-    async fn chat(&self, system_prompt: &str, user_message: &str) -> crate::error::Result<String> {
-        let body = serde_json::json!({
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
-            "stream": false
-        });
-
-        let resp = self
-            .client
-            .post(&self.endpoint)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| RealmsError::internal(format!("HTTP error: {e}")))?;
-
-        let resp_json: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| RealmsError::internal(format!("JSON parse: {e}")))?;
-
-        let content = resp_json["choices"][0]["message"]["content"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
-
-        if content.is_empty() {
-            // Anthropic 格式
-            let anthro_content =
-                resp_json["content"][0]["text"].as_str().unwrap_or("");
-            Ok(anthro_content.to_string())
-        } else {
-            Ok(content)
-        }
-    }
-}
-
-// ============================================================================
 // 测试
 // ============================================================================
 
@@ -657,6 +601,7 @@ impl LlmProvider for HttpTestProvider {
 mod tests {
     use super::*;
     use crate::db::pool::init_memory_pool;
+    use crate::server::config::AppConfig;
     use std::sync::Arc;
     use std::sync::RwLock;
     use std::path::PathBuf;

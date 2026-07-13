@@ -15,11 +15,23 @@
 - **Node.js** 18+ (`npm`)
 - **LLM API Key**（OpenAI 兼容 / Anthropic）
 
-### 一条命令启动
+### 克隆仓库
 
 ```bash
 git clone git@github.com:Administrator-00/RealmsRP.git
-cd RealmsRP/realms-core
+cd RealmsRP
+
+# 克隆依赖上游项目
+git clone https://github.com/GhostXia/AIRP.git
+git clone https://github.com/GhostXia/AIRP-MCP-Server.git
+git clone https://github.com/GhostXia/AIRP-State-Protocol.git
+git clone https://github.com/Xerxes-2/tavern2agent.git
+```
+
+### 一条命令启动
+
+```bash
+cd realms-core
 ./start.sh
 ```
 
@@ -33,11 +45,16 @@ cd RealmsRP/realms-core
 ### 手动启动
 
 ```bash
-# 终端 1：API 服务器 (port 3000)
-cd realms-core
+# 终端 1：AIRP Engine（LLM 网关，port 8000）
+cd AIRP
+cargo build -p airp-core
+cargo run -p airp-core -- daemon --port 8000
+
+# 终端 2：Realms API Server（胶水层，port 3000）
+cd ../realms-core
 cargo run --bin realms-server
 
-# 终端 2：WebUI (port 5173)
+# 终端 3：WebUI（port 5173）
 cd realms-core/webui
 npm install
 npx vite --port 5173
@@ -92,37 +109,17 @@ GM 就是一段 system_prompt `.md` 文件，切换不影响数据：
 | `source='npc'` | 扮演内置 NPC | npc_base（锁死） | ❌ |
 | `source='oc'` | 自定义角色 | 用户输入 | ✅ |
 
-创建一个 OC 时，可为每个 NPC 选关系模板快速开局（青梅竹马 / 一见钟情 / 宿敌 / 师徒 / 萍水相逢）。
-
----
-
-## 截图
-
-```
-PC 端布局：
-┌──────────────────┬─────────────────────────┐
-│  聊天区           │  右侧 Widget 面板        │
-│                  │  ┌─────────────────┐    │
-│  GM：客官里边请！  │  │ StateWidget     │    │
-│  你：我来住店      │  │ HP/MP/心情       │    │
-│  GM：天字号房5两   │  ├─────────────────┤    │
-│                  │  │ AffinityWidget  │    │
-│  [输入框]  [发送]  │  │ 林月如 ❤️ 60    │    │
-│                  │  │ 赵灵儿 ❤️ 70    │    │
-└──────────────────┴─────────────────────────┘
-
-手机端：底部 Tab [聊天][状态][好感][物品][弧光]
-```
+OC 关系模板（快速开局）：青梅竹马 / 一见钟情 / 宿敌 / 师徒 / 萍水相逢。
 
 ---
 
 ## 架构
 
 ```
-浏览器 (Vue 3 + Vite)
+浏览器 (Vue 3 + Vite, port 5173)
     │ HTTP
     ▼
-realms-server (Rust + axum, port 3000)
+realms-server (Rust + axum, port 3000)  ← 胶水层
     │
     ├── /api/config      ← 设置页读写 LLM 配置
     ├── /api/worlds      ← 世界列表 / 详情
@@ -131,14 +128,24 @@ realms-server (Rust + axum, port 3000)
     ├── /api/cycles      ← 周目 CRUD
     └── /api/cycles/:id/turn ← 单轮对话
     │
-    ├── SQLite (memory.db)
-    │   ├── cycles / character_states
+    ├── LLM 调用 ──→ AIRP Engine (port 8000) ← 网关层
+    │                    │
+    ├── SQLite (memory.db)                    ├── /v1/chat/completions
+    │   ├── cycles                           ├── /v1/settings (热重载)
+    │   ├── character_states                 └── → OpenAI / Anthropic
     │   ├── npc_user_relationships
     │   ├── domain_events（事件溯源）
     │   └── episodic / semantic / emotional memories
     │
-    └── LLM Provider (OpenAI / Anthropic)
+    └── 文件系统 (worlds/ gms/ perspectives/)
 ```
+
+| 层 | 组件 | 角色 |
+|---|---|---|
+| 前端 | Vue 3 + Vite + 14 widgets | 浏览器 UI |
+| 胶水 | **realms-server** (本 repo) | API + cycle 管理 + GM 编排 |
+| 网关 | **AIRP Engine** | LLM 调用 + settings 热重载 |
+| 数据 | SQLite + 文件系统 | 状态 / 记忆 / 世界数据 |
 
 ---
 
@@ -185,14 +192,10 @@ realms-core/
 │   │   │   ├── PerspectiveSwitcher  • CycleList
 │   │   │   ├── CycleCompare    • RelationshipMatrix
 │   │   └── pages/              # 7 个路由页面
-│   │       ├── SettingsPage    • WorldSelectPage
-│   │       ├── CharacterSelectPage • OcCreatePage
-│   │       ├── GmSelectPage    • CycleListPage
-│   │       └── GamePlayPage
 │   └── index.html
 ├── worlds/                     # 世界数据（仙剑示例）
-├── gms/                        # 全局 GM 模板（4 种文风）
-├── perspectives/               # 用户视角（4 NPC + 3 OC）
+├── gms/                        # 全局 GM 模板
+├── perspectives/               # 用户视角
 ├── start.sh                    # 一键启动脚本
 └── Cargo.toml
 ```

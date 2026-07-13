@@ -20,6 +20,6 @@ pub use gm_router::{
 
 // gm_dispatcher (M7)
 pub use gm_dispatcher::{
-    audit_for_crosstalk, full_dispatch, parse_subagent_output, FullDispatchResult, LlmProvider,
-    MockLlmProvider, SuggestedEvent,
+    audit_for_crosstalk, full_dispatch, parse_subagent_output, FullDispatchResult, HttpLlmProvider,
+    LlmProvider, MockLlmProvider, SuggestedEvent,
 };
