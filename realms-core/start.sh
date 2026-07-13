@@ -4,12 +4,29 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REALMS_DIR="$(dirname "$SCRIPT_DIR")"
 AIRP_DIR="$REALMS_DIR/AIRP"
+AIRP_MCP_DIR="$REALMS_DIR/AIRP-MCP-Server"
+AIRP_SP_DIR="$REALMS_DIR/AIRP-State-Protocol"
+TAVERN_DIR="$REALMS_DIR/tavern2agent"
 WEBUI_DIR="$SCRIPT_DIR/webui"
 ENGINE_PORT=8000
 API_PORT=3000
 WEBUI_PORT="${WEBUI_PORT:-5173}"
 
 echo "=== Realms RP 平台 启动 ==="
+
+# 0. 克隆上游依赖 (如果不存在)
+clone_if_missing() {
+  local dir="$1" url="$2" name="$3"
+  if [ ! -d "$dir" ]; then
+    echo "[0] 克隆上游依赖: $name..."
+    git clone "$url" "$dir" 2>&1 | tail -1
+  fi
+}
+
+clone_if_missing "$AIRP_DIR"      "https://github.com/GhostXia/AIRP.git"              "AIRP (engine)"
+clone_if_missing "$AIRP_MCP_DIR"  "https://github.com/GhostXia/AIRP-MCP-Server.git"   "AIRP-MCP-Server"
+clone_if_missing "$AIRP_SP_DIR"   "https://github.com/GhostXia/AIRP-State-Protocol.git" "AIRP-State-Protocol"
+clone_if_missing "$TAVERN_DIR"    "https://github.com/Xerxes-2/tavern2agent.git"      "tavern2agent"
 
 # 1. AIRP Engine (LLM 网关层)
 echo "[1/3] AIRP Engine (port $ENGINE_PORT)..."

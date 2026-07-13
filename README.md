@@ -15,25 +15,15 @@
 - **Node.js** 18+ (`npm`)
 - **LLM API Key**（OpenAI 兼容 / Anthropic）
 
-### 克隆仓库
+### 克隆并启动
 
 ```bash
 git clone git@github.com:Administrator-00/RealmsRP.git
-cd RealmsRP
-
-# 克隆依赖上游项目
-git clone https://github.com/GhostXia/AIRP.git
-git clone https://github.com/GhostXia/AIRP-MCP-Server.git
-git clone https://github.com/GhostXia/AIRP-State-Protocol.git
-git clone https://github.com/Xerxes-2/tavern2agent.git
-```
-
-### 一条命令启动
-
-```bash
-cd realms-core
+cd RealmsRP/realms-core
 ./start.sh
 ```
+
+> `start.sh` 会自动克隆上游依赖 (AIRP engine 等) 并启动全部服务。
 
 浏览器打开 **http://localhost:5173**：
 1. **设置页** — 填写 LLM API Key → 保存
