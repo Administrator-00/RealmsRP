@@ -10,9 +10,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
+pub mod arc_reducer;
 pub mod relationship_reducer;
 pub mod state_reducer;
 
+pub use arc_reducer::apply_arc_increment;
 pub use relationship_reducer::apply_relationship_change;
 pub use state_reducer::apply_state_change;
 
@@ -61,6 +63,7 @@ CREATE TABLE IF NOT EXISTS character_states (
     mp_max        INTEGER DEFAULT 50,
     location_id   TEXT,
     status_flags  TEXT NOT NULL DEFAULT '{}',
+    arcs          TEXT NOT NULL DEFAULT '{}',
     arc_phase     TEXT,
     perceived_mood TEXT NOT NULL DEFAULT 'neutral',
     updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
