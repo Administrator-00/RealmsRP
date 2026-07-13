@@ -1,0 +1,50 @@
+# Build artifacts
+target/
+node_modules/
+dist/
+build/
+
+# Upstream projects (cloned separately, not part of Realms source)
+AIRP/
+AIRP-MCP-Server/
+AIRP-State-Protocol/
+tavern2agent/
+
+# Upstream READMEs/AGENTS.md we don't author
+AIRP/AGENTS.md
+AIRP-MCP-Server/README.md
+AIRP-State-Protocol/README.md
+tavern2agent/README.md
+
+
+# Database
+data/
+*.db
+*.db-*
+*.db-shm
+*.db-wal
+
+# Local config
+.env
+.vscode/
+.idea/
+*.log
+nohup.out
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Generated
+realms-core/.pi/agents/*.md
+realms-core/data/
+realms-core/target/
+
+# Source reference docs (1.md/2.md) — kept for history but not required
+# (3.md is the authoritative design)
+1.md
+2.md
+
+
+# AI assistant artifacts
+.claude/
