@@ -40,7 +40,7 @@ worlds/
 │   ├── map.json            地图
 │   ├── rules.json          规则
 │   ├── lorebook.json       世界书
-│   ├── npcs/               内置 NPC (性格不可变)
+│   ├── npcs/               内置 NPC (基础设定固定, 通过弧光成长)
 │   └── gms/                该世界专属 GM 模板
 ├── xiatian_qixia_2/        ← 仙剑二
 └── my_custom_world/        ← 用户自定义世界
@@ -89,10 +89,12 @@ worlds/
 | 命中注定 | 50 | 50 | 50 | destined |
 | 无关系 | — | — | — | — |
 
-### 5. 🛡️ 内置 NPC 性格不可变
+### 5. 🛡️ 内置 NPC 基础设定固定 + 通过弧光可成长
 
-- 世界作者定义的 NPC 性格**锁死**,所有 cycle 共享
-- 玩家**可以扮演**内置 NPC (source='npc'),但不能改他们性格
+- npc_base 的基础设定由 World 作者定义,**本体不动**,所有 cycle 共享.
+- 但 NPC 不冻住: 随着弧光 (§1.4a) 在世界事件发展中累积「变成什么样了」, 由 GM 拼接时注入 —— npc_base 不可改, 但可以变相体现改变.
+- source='npc' / 'oc' **不是「能不能改」分区, 而是告诉 GM 拼接时选哪段人设**: npc_base (锁死, 是李逍遥就是李逍遥) / 用户手写的人设.
+- 这与 SillyTavern「chat 里输入 "NPC 做了什么" 代替 NPC 行动」**本质不同** —— 那不是 Play 而是代替、是反模式; Realms 选定扮演者后**始终是他是 Play 不是 Puppet**.
 - 玩家也可以创建 OC (source='oc'),**自由编辑**
 - 跨 World 可复用同一 perspective
 
